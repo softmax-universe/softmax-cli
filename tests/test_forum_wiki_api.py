@@ -4,7 +4,12 @@ import json
 
 import httpx
 
-from softmax_client.forum_wiki import ForumWikiClient
+from softmax_client.forum_wiki import (
+    CreateCommentRequest,
+    CreatePostRequest,
+    ForumWikiClient,
+    WikiEditRequest,
+)
 
 POST = {
     "id": "post_1",
@@ -66,15 +71,17 @@ def test_mutations_retain_idempotency_keys_across_retries() -> None:
         token="identity-token",
         transport=httpx.MockTransport(handler),
     ) as api:
-        api.create_post(title="Hello", body="Body", idempotency_key="stable-key")
-        api.create_comment("post_1", body="Reply", idempotency_key="comment-key")
+        api.create_post(CreatePostRequest(title="Hello", body="Body", idempotency_key="stable-key"))
+        api.create_comment("post_1", request=CreateCommentRequest(body="Reply", idempotency_key="comment-key"))
         api.edit_wiki_page(
             "global",
             page_slug="guide/start",
-            title="Start",
-            body="Proposed",
-            base_revision_id="wrv_1",
-            idempotency_key="edit-key",
+            request=WikiEditRequest(
+                title="Start",
+                body="Proposed",
+                base_revision_id="wrv_1",
+                idempotency_key="edit-key",
+            ),
         )
 
     assert [body["idempotency_key"] for body in bodies["/observatory/v2/posts"]] == ["stable-key", "stable-key"]

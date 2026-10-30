@@ -11,7 +11,12 @@ from uuid import uuid4
 import typer
 
 from softmax_client.auth import DEFAULT_API_SERVER
-from softmax_client.forum_wiki import ForumWikiClient, WikiEditConflictResponse
+from softmax_client.forum_wiki import (
+    CommunitySearchQuery,
+    ForumWikiClient,
+    WikiEditConflictResponse,
+    WikiEditRequest,
+)
 
 wiki_app = typer.Typer(
     no_args_is_help=True,
@@ -61,11 +66,13 @@ def wiki_edit(
         result = api.edit_wiki_page(
             wiki_slug,
             page_slug=page_slug,
-            title=title or base.title,
-            body=proposed_body,
-            base_revision_id=base.current_revision_id,
-            idempotency_key=str(uuid4()),
-            note=note,
+            request=WikiEditRequest(
+                title=title or base.title,
+                body=proposed_body,
+                base_revision_id=base.current_revision_id,
+                idempotency_key=str(uuid4()),
+                note=note,
+            ),
         )
     if isinstance(result, WikiEditConflictResponse):
         conflict_dir = Path(tempfile.mkdtemp(prefix="softmax-wiki-conflict-"))
@@ -94,10 +101,7 @@ def wiki_edit(
             retry_command.extend(["--note", note])
         print(shlex.join(retry_command))
         raise typer.Exit(1)
-    if json_output:
-        print(result.model_dump_json(indent=2))
-        return
-    print(f"{result.page.id}\t{result.revision.id}")
+    print(result.model_dump_json(indent=2) if json_output else f"{result.page.id}\t{result.revision.id}")
 
 
 @wiki_app.command("history")
@@ -133,11 +137,13 @@ def wiki_search(
     with ForumWikiClient.from_current_token(server, product="softmax-cli") as api:
         page = api.search_wiki(
             wiki_slug,
-            query=query,
-            author_user_id=author_user_id,
-            author_player_id=author_player_id,
-            limit=limit,
-            cursor=cursor,
+            query=CommunitySearchQuery(
+                q=query,
+                author_user_id=author_user_id,
+                author_player_id=author_player_id,
+                limit=limit,
+                cursor=cursor,
+            ),
         )
     if json_output:
         print(page.model_dump_json(indent=2))

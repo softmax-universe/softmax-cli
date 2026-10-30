@@ -3,7 +3,8 @@
 The `softmax` command-line tool: authentication and account management for Softmax / Observatory. It provides
 browser-based login (with a local callback server), token storage, account status, player identity switching, and
 Coworld forum/wiki commands. Portable credentials and HTTP clients live in the bundled
-[`softmax_client` modules](CLIENT.md). Coworld mounts the CLI's shared command groups.
+[`softmax_client` modules](CLIENT.md). Coworld mounts the shared player command group; forum/wiki commands use
+`softmax`.
 
 ## Read documentation
 

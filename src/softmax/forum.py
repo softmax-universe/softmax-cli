@@ -9,7 +9,13 @@ from uuid import uuid4
 import typer
 
 from softmax_client.auth import DEFAULT_API_SERVER
-from softmax_client.forum_wiki import ForumWikiClient
+from softmax_client.forum_wiki import (
+    CommunitySearchQuery,
+    CreateCommentRequest,
+    CreatePostRequest,
+    ForumWikiClient,
+    VoteRequest,
+)
 
 forum_app = typer.Typer(
     no_args_is_help=True,
@@ -59,11 +65,8 @@ def forum_post(
     """Create a global-forum post as the active token identity."""
     idempotency_key = str(uuid4())
     with ForumWikiClient.from_current_token(server, product="softmax-cli") as api:
-        post = api.create_post(title=title, body=file.read_text(), idempotency_key=idempotency_key)
-    if json_output:
-        print(post.model_dump_json(indent=2))
-        return
-    print(f"{post.id}\t{post.title}")
+        post = api.create_post(CreatePostRequest(title=title, body=file.read_text(), idempotency_key=idempotency_key))
+    print(post.model_dump_json(indent=2) if json_output else f"{post.id}\t{post.title}")
 
 
 @forum_app.command("comment")
@@ -79,14 +82,13 @@ def forum_comment(
     with ForumWikiClient.from_current_token(server, product="softmax-cli") as api:
         comment = api.create_comment(
             post_id,
-            body=file.read_text(),
-            parent_id=parent_id,
-            idempotency_key=idempotency_key,
+            request=CreateCommentRequest(
+                body=file.read_text(),
+                parent_id=parent_id,
+                idempotency_key=idempotency_key,
+            ),
         )
-    if json_output:
-        print(comment.model_dump_json(indent=2))
-        return
-    print(comment.id)
+    print(comment.model_dump_json(indent=2) if json_output else comment.id)
 
 
 @forum_app.command("vote")
@@ -99,11 +101,12 @@ def forum_vote(
 ) -> None:
     """Set or clear your vote as the active token identity."""
     with ForumWikiClient.from_current_token(server, product="softmax-cli") as api:
-        vote = api.vote(post_id, comment_id=comment_id, value=cast(Literal[-1, 0, 1], value))
-    if json_output:
-        print(vote.model_dump_json(indent=2))
-        return
-    print(f"value\t{vote.value}\nscore\t{vote.score}\nvote_count\t{vote.vote_count}")
+        vote = api.vote(post_id, comment_id=comment_id, request=VoteRequest(value=cast(Literal[-1, 0, 1], value)))
+    print(
+        vote.model_dump_json(indent=2)
+        if json_output
+        else f"value\t{vote.value}\nscore\t{vote.score}\nvote_count\t{vote.vote_count}"
+    )
 
 
 @forum_app.command("search")
@@ -120,12 +123,14 @@ def forum_search(
     """Search visible forum posts."""
     with ForumWikiClient.from_current_token(server, product="softmax-cli") as api:
         page = api.search_forum(
-            query,
+            CommunitySearchQuery(
+                q=query,
+                author_user_id=author_user_id,
+                author_player_id=author_player_id,
+                limit=limit,
+                cursor=cursor,
+            ),
             forum_slug=forum_slug,
-            author_user_id=author_user_id,
-            author_player_id=author_player_id,
-            limit=limit,
-            cursor=cursor,
         )
     if json_output:
         print(page.model_dump_json(indent=2))

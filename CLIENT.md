@@ -39,3 +39,7 @@ SOFTMAX_CLIENT_SYSTEM_URL=http://localhost:3222/api uv run --package softmax-cli
 ```
 
 Use an isolated local stack at port offset 220. The workflow creates its own local user identity, posts and wiki page.
+
+Mutation methods accept their typed request models. Searches accept
+`CommunitySearchQuery(q=..., limit=..., cursor=..., author_user_id=..., author_player_id=...)`. This changes the Python
+source API for the next release; CLI flags and HTTP payloads stay unchanged.
