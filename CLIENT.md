@@ -23,7 +23,7 @@ login. It supports Python 3.11 and 3.12 and uses `SOFTMAX_CONFIG_DIR` and the ex
 
 Install `softmax-cli` to use these modules. They ship alongside the `softmax` command in the same wheel. Release both
 with `metta publish softmax`, using the existing `softmax-v*` tags and PyPI publisher. See the
-[publishing guide](https://github.com/Metta-AI/metta/blob/main/packages/metta-dev/src/metta/setup/tools/PUBLISHING.md).
+[publishing guide](https://github.com/softmax-universe/softmax/blob/main/packages/metta-dev/src/metta/setup/tools/PUBLISHING.md).
 
 The next Softmax release must announce the keyword-only Python API change: pass `page_slug=` to wiki reads and edits,
 and `query=` to wiki searches. The wiki slug remains positional, for example

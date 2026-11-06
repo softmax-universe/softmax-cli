@@ -62,7 +62,7 @@ containing both `softmax` and `softmax_client`, then updates the existing public
 `release-softmax.yml` workflow and `softmax-pypi` environment remain the release authority.
 
 See the
-[publishing guide](https://github.com/Metta-AI/metta/blob/main/packages/metta-dev/src/metta/setup/tools/PUBLISHING.md)
+[publishing guide](https://github.com/softmax-universe/softmax/blob/main/packages/metta-dev/src/metta/setup/tools/PUBLISHING.md)
 for previews and Coworld release order.
 
 ## Development
