@@ -21,6 +21,11 @@ reads. `http` constructs HTTPX clients; `rate_limits` owns bounded pre-execution
 The `softmax-cli` distribution contains both these modules and the `softmax` command, including interactive Python
 login. It supports Python 3.11 and 3.12 and uses `SOFTMAX_CONFIG_DIR` and the existing `credentials.yaml` format.
 
+The default `https://softmax.com/api` reaches the Core gateway through the website. Explicit
+`https://softmax-api.softmax.com`, `https://api.softmax.com`, and `https://api.observatory.softmax-research.net` servers
+use API root paths and sign in through `https://softmax.com/cli-auth`. Saved credentials remain specific to the chosen
+server URL, including custom and local servers.
+
 Install `softmax-cli` to use these modules. They ship alongside the `softmax` command in the same wheel. Release both
 with `metta publish softmax`, using the existing `softmax-v*` tags and PyPI publisher. See the
 [publishing guide](https://github.com/softmax-universe/softmax/blob/main/packages/metta-dev/src/metta/setup/tools/PUBLISHING.md).
