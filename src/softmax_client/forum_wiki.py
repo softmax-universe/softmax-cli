@@ -23,14 +23,12 @@ class WireModel(BaseModel):
 ResponseT = TypeVar("ResponseT", bound=WireModel)
 
 
-def _search_params(
-    query: str, *, limit: int, cursor: str | None, author_user_id: str | None, author_player_id: str | None
-) -> dict[str, str | int]:
-    params: dict[str, str | int] = {"q": query, "limit": limit}
-    for key, value in (("author_user_id", author_user_id), ("author_player_id", author_player_id), ("cursor", cursor)):
-        if value is not None:
-            params[key] = value
-    return params
+class CommunitySearchQuery(BaseModel):
+    q: str
+    limit: int = 20
+    author_user_id: str | None = None
+    author_player_id: str | None = None
+    cursor: str | None = None
 
 
 class UserAuthor(WireModel):
@@ -260,58 +258,28 @@ class ForumWikiClient:
         response.raise_for_status()
         return response.text
 
-    def create_post(self, *, title: str, body: str, idempotency_key: str) -> PostPublic:
-        return self._validated_request(
-            response_type=PostPublic,
-            method="POST",
-            path="posts",
-            body=CreatePostRequest(title=title, body=body, idempotency_key=idempotency_key),
-        )
+    def create_post(self, request: CreatePostRequest) -> PostPublic:
+        return self._validated_request(response_type=PostPublic, method="POST", path="posts", body=request)
 
-    def create_comment(
-        self,
-        post_id: str,
-        *,
-        body: str,
-        idempotency_key: str,
-        parent_id: str | None = None,
-    ) -> PostCommentPublic:
+    def create_comment(self, post_id: str, *, request: CreateCommentRequest) -> PostCommentPublic:
         return self._validated_request(
             response_type=PostCommentPublic,
             method="POST",
             path=f"posts/{quote(post_id, safe='')}/comments",
-            body=CreateCommentRequest(body=body, idempotency_key=idempotency_key, parent_id=parent_id),
+            body=request,
         )
 
-    def vote(
-        self,
-        post_id: str,
-        *,
-        value: Literal[-1, 0, 1],
-        comment_id: str | None = None,
-    ) -> VotePublic:
+    def vote(self, post_id: str, *, request: VoteRequest, comment_id: str | None = None) -> VotePublic:
         path = f"posts/{quote(post_id, safe='')}"
         if comment_id is not None:
             path += f"/comments/{quote(comment_id, safe='')}"
-        return self._validated_request(
-            response_type=VotePublic, method="PUT", path=f"{path}/vote", body=VoteRequest(value=value)
-        )
+        return self._validated_request(response_type=VotePublic, method="PUT", path=f"{path}/vote", body=request)
 
-    def search_forum(
-        self,
-        query: str,
-        *,
-        forum_slug: str | None = None,
-        author_user_id: str | None = None,
-        author_player_id: str | None = None,
-        limit: int = 20,
-        cursor: str | None = None,
-    ) -> ForumSearchPage:
+    def search_forum(self, query: CommunitySearchQuery, *, forum_slug: str | None = None) -> ForumSearchPage:
         path = "forums/search" if forum_slug is None else f"forums/{quote(forum_slug, safe='')}/search"
-        params = _search_params(
-            query, limit=limit, cursor=cursor, author_user_id=author_user_id, author_player_id=author_player_id
+        return self._validated_request(
+            response_type=ForumSearchPage, method="GET", path=path, params=query.model_dump(exclude_none=True)
         )
-        return self._validated_request(response_type=ForumSearchPage, method="GET", path=path, params=params)
 
     def read_wiki_page(self, wiki_slug: str, *, page_slug: str) -> WikiPagePublic:
         return self._validated_request(
@@ -321,26 +289,12 @@ class ForumWikiClient:
         )
 
     def edit_wiki_page(
-        self,
-        wiki_slug: str,
-        *,
-        page_slug: str,
-        title: str,
-        body: str,
-        base_revision_id: str,
-        idempotency_key: str,
-        note: str | None = None,
+        self, wiki_slug: str, *, page_slug: str, request: WikiEditRequest
     ) -> WikiEditPublic | WikiEditConflictResponse:
         response = self._request(
             method="PUT",
             path=f"wikis/{quote(wiki_slug, safe='')}/pages/{quote(page_slug, safe='/')}",
-            body=WikiEditRequest(
-                title=title,
-                body=body,
-                base_revision_id=base_revision_id,
-                idempotency_key=idempotency_key,
-                note=note,
-            ),
+            body=request,
         )
         if response.status_code == 409:
             return WikiEditConflictResponse.model_validate(response.json())
@@ -352,19 +306,10 @@ class ForumWikiClient:
             response_type=WikiRevisionListPublic, method="GET", path=f"wiki-pages/{quote(page_id, safe='')}/revisions"
         )
 
-    def search_wiki(
-        self,
-        wiki_slug: str,
-        *,
-        query: str,
-        author_user_id: str | None = None,
-        author_player_id: str | None = None,
-        limit: int = 20,
-        cursor: str | None = None,
-    ) -> WikiSearchPage:
-        params = _search_params(
-            query, limit=limit, cursor=cursor, author_user_id=author_user_id, author_player_id=author_player_id
-        )
+    def search_wiki(self, wiki_slug: str, *, query: CommunitySearchQuery) -> WikiSearchPage:
         return self._validated_request(
-            response_type=WikiSearchPage, method="GET", path=f"wikis/{quote(wiki_slug, safe='')}/search", params=params
+            response_type=WikiSearchPage,
+            method="GET",
+            path=f"wikis/{quote(wiki_slug, safe='')}/search",
+            params=query.model_dump(exclude_none=True),
         )

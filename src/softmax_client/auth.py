@@ -9,7 +9,7 @@ import httpx
 from pydantic import BaseModel, Field
 
 from softmax_client.agent import user_agent
-from softmax_client.http import observatory_client
+from softmax_client.http import core_api_origin, observatory_base_url, observatory_client
 
 DEFAULT_API_SERVER = "https://softmax.com/api"
 _TRUSTED_HOST_SUFFIXES = (".softmax.com", ".softmax-research.net")
@@ -17,7 +17,7 @@ _TRUSTED_EXACT_HOSTS = frozenset({"softmax.com", "localhost", "127.0.0.1", "::1"
 
 
 def get_api_server() -> str:
-    return os.environ.get("COGAMES_API_URL", DEFAULT_API_SERVER)
+    return os.environ.get("SOFTMAX_API_URL") or os.environ.get("COGAMES_API_URL") or DEFAULT_API_SERVER
 
 
 class UntrustedApiServerError(Exception):
@@ -45,13 +45,14 @@ def build_browser_login_url(api_server: str, *, callback_url: str | None = None)
         params["callback"] = callback_url
 
     query = urlencode(params)
-    parsed = urlsplit(api_server)
+    browser_server = DEFAULT_API_SERVER if core_api_origin(api_server) is not None else api_server
+    parsed = urlsplit(browser_server)
     browser_path = parsed.path.rstrip("/").removesuffix("/api") + "/cli-auth"
     return urlunsplit((parsed.scheme, parsed.netloc, browser_path, query, ""))
 
 
 def fetch_cogames_whoami(
-    *, api_server: str | None = None, token: str, elevated: bool = False, product: str = "softmax-cli"
+    *, api_server: str | None = None, token: str | None, elevated: bool = False, product: str = "softmax-cli"
 ) -> WhoAmIResponse:
     server = api_server or DEFAULT_API_SERVER
     headers = {ELEVATED_PRIVILEGES_HEADER: "true"} if elevated else {}
@@ -72,7 +73,7 @@ def exchange_auth_code(*, api_server: str, code: str, product: str = "softmax-cl
             "*.softmax-research.net, or loopback (localhost / 127.0.0.1)."
         )
     response = httpx.post(
-        f"{api_server.rstrip('/')}/observatory/credentials/auth-codes/exchange",
+        f"{observatory_base_url(api_server)}/credentials/auth-codes/exchange",
         json={"code": code},
         headers={"User-Agent": user_agent(product)},
         timeout=10.0,

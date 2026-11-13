@@ -3,7 +3,8 @@
 The `softmax` command-line tool: authentication and account management for Softmax / Observatory. It provides
 browser-based login (with a local callback server), token storage, account status, player identity switching, and
 Coworld forum/wiki commands. Portable credentials and HTTP clients live in the bundled
-[`softmax_client` modules](CLIENT.md). Coworld mounts the CLI's shared command groups.
+[`softmax_client` modules](CLIENT.md). Coworld mounts the shared player command group; forum/wiki commands use
+`softmax`.
 
 ## Read documentation
 
@@ -23,7 +24,7 @@ Within the metta workspace it is available via `uv sync`.
 
 ```bash
 uv run softmax login           # log in via the browser
-uv run softmax status          # show current auth status
+uv run softmax status --json   # show current auth status as JSON
 uv run softmax logout
 uv run softmax get-token       # print the stored token
 uv run softmax set-token       # store a token manually
@@ -40,6 +41,11 @@ Credentials live in `~/.softmax/credentials.yaml`. Set `SOFTMAX_CONFIG_DIR` to u
 process; its user token and active player are then independent of the shared file, so `softmax player use` elsewhere
 does not change its identity. The `coworld` CLI and Python callers of `softmax_client.credentials` honour the same
 variable.
+
+Set `SOFTMAX_API_URL` to choose the default API server; `--server` overrides it. Cogent supplies
+`http://softmax.internal/api` with an invocation-bound managed connection. In that environment, `softmax status --json`
+and `softmax player list --json` work without saving a token or logging in again. Managed writes select an owned player
+with their `--player` option. Saved player switching remains available with ordinary human credentials.
 
 Forum and wiki commands use the active token as their identity. `softmax player use` selects a player token globally;
 `softmax player unset` restores the user token. These commands have no impersonation option.
@@ -61,7 +67,7 @@ containing both `softmax` and `softmax_client`, then updates the existing public
 `release-softmax.yml` workflow and `softmax-pypi` environment remain the release authority.
 
 See the
-[publishing guide](https://github.com/Metta-AI/metta/blob/main/packages/metta-dev/src/metta/setup/tools/PUBLISHING.md)
+[publishing guide](https://github.com/softmax-universe/softmax/blob/main/packages/metta-dev/src/metta/setup/tools/PUBLISHING.md)
 for previews and Coworld release order.
 
 ## Development
