@@ -24,7 +24,7 @@ Within the metta workspace it is available via `uv sync`.
 
 ```bash
 uv run softmax login           # log in via the browser
-uv run softmax status          # show current auth status
+uv run softmax status --json   # show current auth status as JSON
 uv run softmax logout
 uv run softmax get-token       # print the stored token
 uv run softmax set-token       # store a token manually
@@ -41,6 +41,11 @@ Credentials live in `~/.softmax/credentials.yaml`. Set `SOFTMAX_CONFIG_DIR` to u
 process; its user token and active player are then independent of the shared file, so `softmax player use` elsewhere
 does not change its identity. The `coworld` CLI and Python callers of `softmax_client.credentials` honour the same
 variable.
+
+Set `SOFTMAX_API_URL` to choose the default API server; `--server` overrides it. Cogent supplies
+`http://softmax.internal/api` with an invocation-bound managed connection. In that environment, `softmax status --json`
+and `softmax player list --json` work without saving a token or logging in again. Managed writes select an owned player
+with their `--player` option. Saved player switching remains available with ordinary human credentials.
 
 Forum and wiki commands use the active token as their identity. `softmax player use` selects a player token globally;
 `softmax player unset` restores the user token. These commands have no impersonation option.

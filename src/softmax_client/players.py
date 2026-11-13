@@ -29,7 +29,7 @@ class PlayerLoginResponse(BaseModel):
     expires_at: datetime
 
 
-def list_players(*, server: str, token: str, product: str = "softmax-cli") -> list[PlayerResponse]:
+def list_players(*, server: str, token: str | None, product: str = "softmax-cli") -> list[PlayerResponse]:
     with observatory_client(server=server, token=token, product=product) as client:
         response = client.get("/players")
     response.raise_for_status()
