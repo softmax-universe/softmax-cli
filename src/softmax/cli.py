@@ -5,6 +5,7 @@ import sys
 import httpx
 import typer
 from rich._spinners import SPINNERS
+from rich.console import Console
 from rich.panel import Panel
 
 from softmax import card
@@ -30,6 +31,7 @@ from softmax_client.auth import (
     try_exchange_auth_code,
 )
 from softmax_client.credentials import delete_all_tokens, load_current_token, load_user_token, save_user_token
+from softmax_client.http import is_managed_api_server
 
 app = typer.Typer(
     cls=AgentFriendlyGroup,
@@ -47,6 +49,14 @@ app.command("docs")(docs_cmd)
 app.add_typer(player_app, name="player")
 app.add_typer(forum_app, name="forum", epilog=f"Docs: {DOCS_FORUMS_AND_WIKIS_URL}")
 app.add_typer(wiki_app, name="wiki", epilog=f"Docs: {DOCS_FORUMS_AND_WIKIS_URL}")
+
+
+def _require_credential_server(api_server: str) -> None:
+    if is_managed_api_server(api_server):
+        raise typer.BadParameter(
+            "Cogent manages this Softmax connection. Use softmax status, "
+            "or select --server to manage saved credentials."
+        )
 
 
 def _print_next_steps(api_server: str) -> None:
@@ -85,6 +95,7 @@ def login_cmd(
     from urllib.parse import urlparse  # noqa: PLC0415
 
     api_server = server or get_api_server()
+    _require_credential_server(api_server)
     user_token = None if force else load_user_token(server=api_server)
     if user_token is not None:
         try:
@@ -160,6 +171,7 @@ def logout_cmd(
 ) -> None:
     """Remove saved authentication token."""
     api_server = server or get_api_server()
+    _require_credential_server(api_server)
     if delete_all_tokens(server=api_server):
         console.print("Logged out.", style="green")
     else:
@@ -177,7 +189,9 @@ def get_login_url_cmd(
     ),
 ) -> None:
     """Print a browser sign-in URL for manual login."""
-    print(build_browser_login_url(server or get_api_server()))
+    api_server = server or get_api_server()
+    _require_credential_server(api_server)
+    print(build_browser_login_url(api_server))
 
 
 @app.command(name="status")
@@ -200,29 +214,41 @@ def status_cmd(
             "they flip the same toggle there."
         ),
     ),
+    json_output: bool = typer.Option(False, "--json", help="Print the authenticated identity as JSON."),
 ) -> None:
     """Check authentication status via /whoami."""
     from softmax_client.credentials import get_active_player_id, load_player_session  # noqa: PLC0415
 
     api_server = server or get_api_server()
-    token = load_current_token(server=api_server)
-    if not token:
-        console.print("[red]Not authenticated.[/red] Run [cyan]softmax login[/cyan] first.")
+    managed = is_managed_api_server(api_server)
+    token = None if managed else load_current_token(server=api_server)
+    if token is None and not managed:
+        Console(stderr=True).print("[red]Not authenticated.[/red] Run [cyan]softmax login[/cyan] first.")
         raise typer.Exit(1)
+    if managed and elevated:
+        raise typer.BadParameter("Managed Softmax connections do not support --elevated.")
 
     session = fetch_cogames_whoami(api_server=api_server, token=token, elevated=elevated, product="softmax-cli")
     if session.subject_type == "anonymous":
+        if managed:
+            Console(stderr=True).print("Managed Softmax connection is unavailable. Reconnect Softmax in Cogent.")
+            raise typer.Exit(1)
         player_token = load_player_session(server=api_server)
         if player_token and player_token == token:
             player_id = get_active_player_id(server=api_server)
-            console.print(
+            Console(stderr=True).print(
                 f"[red]Active player session expired[/red] ({player_id})."
                 " Run [cyan]softmax player use[/cyan] to refresh"
                 " or [cyan]softmax player unset[/cyan] to revert to your user credential."
             )
             raise typer.Exit(1)
-        console.print("[red]Token is invalid or expired.[/red] Run [cyan]softmax login[/cyan] to re-authenticate.")
+        Console(stderr=True).print(
+            "[red]Token is invalid or expired.[/red] Run [cyan]softmax login[/cyan] to re-authenticate."
+        )
         raise typer.Exit(1)
+    if json_output:
+        print(session.model_dump_json(indent=2))
+        return
     console.print("[green]Authenticated[/green]")
     console.print(f"user_email: {session.user_email}")
     console.print(f"subject_type: {session.subject_type}")
@@ -248,6 +274,7 @@ def get_token_cmd(
 ) -> None:
     """Print the saved token to stdout (for scripting)."""
     api_server = server or get_api_server()
+    _require_credential_server(api_server)
     token = load_current_token(server=api_server)
     if not token:
         console.print("[red]No token found.[/red] Run [cyan]softmax login[/cyan] first.", style="bold")
@@ -268,6 +295,7 @@ def set_token_cmd(
 ) -> None:
     """Manually set a token (for CI or headless environments)."""
     api_server = server or get_api_server()
+    _require_credential_server(api_server)
     save_user_token(server=api_server, token=token)
     print(f"\nToken saved for {api_server}")
     _print_next_steps(api_server)
@@ -286,6 +314,7 @@ def exchange_code_cmd(
 ) -> None:
     """Exchange a one-time auth code for a credential."""
     api_server = server or get_api_server()
+    _require_credential_server(api_server)
     result = try_exchange_auth_code(api_server=api_server, code=code, product="softmax-cli")
     if isinstance(result, ExchangeFailure):
         console.print(result.message, style="red", highlight=False)

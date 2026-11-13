@@ -17,7 +17,7 @@ _TRUSTED_EXACT_HOSTS = frozenset({"softmax.com", "localhost", "127.0.0.1", "::1"
 
 
 def get_api_server() -> str:
-    return os.environ.get("COGAMES_API_URL", DEFAULT_API_SERVER)
+    return os.environ.get("SOFTMAX_API_URL") or os.environ.get("COGAMES_API_URL") or DEFAULT_API_SERVER
 
 
 class UntrustedApiServerError(Exception):
@@ -52,7 +52,7 @@ def build_browser_login_url(api_server: str, *, callback_url: str | None = None)
 
 
 def fetch_cogames_whoami(
-    *, api_server: str | None = None, token: str, elevated: bool = False, product: str = "softmax-cli"
+    *, api_server: str | None = None, token: str | None, elevated: bool = False, product: str = "softmax-cli"
 ) -> WhoAmIResponse:
     server = api_server or DEFAULT_API_SERVER
     headers = {ELEVATED_PRIVILEGES_HEADER: "true"} if elevated else {}

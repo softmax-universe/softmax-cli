@@ -18,7 +18,8 @@ from rich.table import Table
 
 from softmax._console import console
 from softmax_client import credentials
-from softmax_client.auth import DEFAULT_API_SERVER
+from softmax_client.auth import get_api_server
+from softmax_client.http import is_managed_api_server
 from softmax_client.players import create_player, list_players, login_player
 
 
@@ -26,6 +27,10 @@ def _user_token(server: str) -> str:
     # Player routes require a real user identity (USER_AUTH) and reject
     # player-scoped tokens, so resolve the user token directly rather than
     # load_current_token, which would pick up the active player session.
+    if is_managed_api_server(server):
+        raise typer.BadParameter(
+            "Managed commands select an owned player with --player; saved player sessions are unavailable."
+        )
     token = credentials.load_user_token(server=server)
     if token is None:
         raise RuntimeError(f"Not authenticated. Run: softmax login --server {server}")
@@ -37,11 +42,14 @@ player_app = typer.Typer(no_args_is_help=True, help="Manage the active player id
 
 @player_app.command("list", help="List your player identities; the active one is highlighted.")
 def player_list(
-    server: Annotated[str, typer.Option("--server", help="API server URL.")] = DEFAULT_API_SERVER,
+    server: Annotated[str | None, typer.Option("--server", help="API server URL.")] = None,
     json_output: Annotated[bool, typer.Option("--json", help="Print raw JSON.")] = False,
 ) -> None:
-    active_id = credentials.get_active_player_id(server=server)
-    players = list_players(server=server, token=_user_token(server), product="softmax-cli")
+    server = server or get_api_server()
+    managed = is_managed_api_server(server)
+    active_id = None if managed else credentials.get_active_player_id(server=server)
+    token = None if managed else _user_token(server)
+    players = list_players(server=server, token=token, product="softmax-cli")
     if json_output:
         payload = [{**p.model_dump(mode="json"), "active": p.id == active_id} for p in players]
         print(json.dumps(payload, indent=2))
@@ -64,9 +72,10 @@ def player_list(
 @player_app.command("create", help="Create a player identity under your account.")
 def player_create(
     name: Annotated[str, typer.Argument(help="Name for the new player.")],
-    server: Annotated[str, typer.Option("--server", help="API server URL.")] = DEFAULT_API_SERVER,
+    server: Annotated[str | None, typer.Option("--server", help="API server URL.")] = None,
     json_output: Annotated[bool, typer.Option("--json", help="Print raw JSON.")] = False,
 ) -> None:
+    server = server or get_api_server()
     player = create_player(server=server, token=_user_token(server), name=name, product="softmax-cli")
     if json_output:
         print(json.dumps(player.model_dump(mode="json"), indent=2))
@@ -77,8 +86,11 @@ def player_create(
 @player_app.command("use", help="Act as this player in every auth-backed command.")
 def player_use(
     player_id: Annotated[str, typer.Argument(help="Player ID (ply_...) to act as.")],
-    server: Annotated[str, typer.Option("--server", help="API server URL.")] = DEFAULT_API_SERVER,
+    server: Annotated[str | None, typer.Option("--server", help="API server URL.")] = None,
 ) -> None:
+    server = server or get_api_server()
+    if is_managed_api_server(server):
+        raise typer.BadParameter("Managed commands select --player explicitly; saved player sessions are unavailable.")
     # Reuse a cached, non-expired session rather than minting a fresh token.
     cached = credentials.get_cached_player_session(server=server, player_id=player_id)
     if cached is not None and cached.expires_at - timedelta(minutes=5) > datetime.now(UTC):
@@ -104,8 +116,11 @@ def player_use(
 
 @player_app.command("unset", help="Return to your main user credential.")
 def player_unset(
-    server: Annotated[str, typer.Option("--server", help="API server URL.")] = DEFAULT_API_SERVER,
+    server: Annotated[str | None, typer.Option("--server", help="API server URL.")] = None,
 ) -> None:
+    server = server or get_api_server()
+    if is_managed_api_server(server):
+        raise typer.BadParameter("Managed connections have no saved player session. Select --player on each command.")
     if credentials.clear_active_player_session(server=server):
         console.print("[green]Reverted to your main user credential.[/green]")
     else:

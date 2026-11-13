@@ -26,6 +26,16 @@ The default `https://softmax.com/api` reaches the Core gateway through the websi
 use API root paths and sign in through `https://softmax.com/cli-auth`. Saved credentials remain specific to the chosen
 server URL, including custom and local servers.
 
+`SOFTMAX_API_URL` selects the default API server before the legacy `COGAMES_API_URL` setting. An explicit CLI `--server`
+selects that server's ordinary saved credential.
+
+Cogent configures the fixed managed server `http://softmax.internal/api`. Shared clients send no bearer token to this
+server. They attach the invocation's `SOFTMAX_COMMAND_HANDLE` as `X-Cogent-Command` only to that origin, including
+across redirects. The runtime binds this handle to the admitted command and current revocable connection; it is not an
+account credential. Managed commands bypass saved credentials and select an owned player explicitly when needed.
+`softmax status --json` and `softmax player list --json` inspect the connection without another login. Human login and
+active-player sessions retain their saved-file behavior for all ordinary servers.
+
 Install `softmax-cli` to use these modules. They ship alongside the `softmax` command in the same wheel. Release both
 with `metta publish softmax`, using the existing `softmax-v*` tags and PyPI publisher. See the
 [publishing guide](https://github.com/softmax-universe/softmax/blob/main/packages/metta-dev/src/metta/setup/tools/PUBLISHING.md).

@@ -19,6 +19,7 @@ from typer.core import TyperGroup
 
 from softmax.docs import DOCS_AUTHENTICATION_URL, DOCS_ERROR_HANDLING_URL, DOCS_RATE_LIMITS_URL
 from softmax_client.agent import detect_coding_agent
+from softmax_client.http import MANAGED_API_SERVER
 
 REQUEST_ID_HEADER = "X-Request-Id"
 
@@ -47,7 +48,11 @@ def render_http_status_error(exc: httpx.HTTPStatusError) -> str:
         elif detail is not None:
             detail_lines.append(f"Detail: {json.dumps(detail)[:400]}")
 
-    if status == 401:
+    if status == 401 and request.url.host == httpx.URL(MANAGED_API_SERVER).host:
+        next_step = (
+            "Next: reconnect Softmax in Cogent, then start a new command. Managed commands do not use saved tokens."
+        )
+    elif status == 401:
         next_step = "Next: run `uv run softmax status`; if the token is missing or expired, run `uv run softmax login`."
     elif status == 403:
         next_step = (
