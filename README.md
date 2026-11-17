@@ -25,6 +25,7 @@ Within the metta workspace it is available via `uv sync`.
 ```bash
 uv run softmax login           # log in via the browser
 uv run softmax status --json   # show current auth status as JSON
+uv run softmax workspace-scheduler-status  # inspect scheduling blocks and Researcher reservations
 uv run softmax logout
 uv run softmax get-token       # print the stored token
 uv run softmax set-token       # store a token manually

@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-import asyncio
 import html
 import socket
 import sys
 import threading
 import time
 import webbrowser
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Literal
@@ -29,7 +29,6 @@ from softmax_client.credentials import save_user_token
 class _CLIAuthSession:
     token: str | None = None
     error: str | None = None
-    server_error: str | None = None
     auth_completed: threading.Event = field(default_factory=threading.Event)
     completion_lock: threading.Lock = field(default_factory=threading.Lock)
 
@@ -203,12 +202,6 @@ def _error_html(*, error_message: str) -> str:
     )
 
 
-def _find_free_port() -> int:
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-        sock.bind(("127.0.0.1", 0))
-        return sock.getsockname()[1]
-
-
 def _open_browser(*, url: str) -> None:
     webbrowser.open(url)
 
@@ -295,32 +288,23 @@ def _start_manual_code_prompt(*, session: _CLIAuthSession, api_server: str) -> N
     threading.Thread(target=prompt_loop, daemon=True).start()
 
 
-def _run_server(*, session: _CLIAuthSession, port: int, api_server: str) -> None:
-    try:
+@contextmanager
+def _callback_url(session: _CLIAuthSession, *, api_server: str) -> Iterator[str | None]:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as listener:
+        listener.bind(("127.0.0.1", 0))
+        port = listener.getsockname()[1]
         app = _create_app(session, api_server=api_server)
-        config = uvicorn.Config(
-            app=app,
-            host="127.0.0.1",
-            port=port,
-            log_level="error",
-            access_log=False,
-        )
-        asyncio.run(uvicorn.Server(config).serve())
-    except Exception as exc:
-        session.server_error = f"Server error: {exc}"
-
-
-def _wait_for_callback_server_to_start(*, session: _CLIAuthSession, port: int, timeout_seconds: float = 3.0) -> bool:
-    deadline = time.time() + timeout_seconds
-    while time.time() < deadline:
-        if session.server_error:
-            return False
+        server = uvicorn.Server(uvicorn.Config(app, log_level="error", access_log=False))
+        worker = threading.Thread(target=server.run, kwargs={"sockets": [listener]}, daemon=True)
+        worker.start()
         try:
-            with socket.create_connection(("127.0.0.1", port), timeout=0.2):
-                return True
-        except OSError:
-            time.sleep(0.05)
-    return False
+            deadline = time.monotonic() + 3
+            while worker.is_alive() and not server.started and time.monotonic() < deadline:
+                time.sleep(0.05)
+            yield f"http://127.0.0.1:{port}/callback" if server.started else None
+        finally:
+            server.should_exit = True
+            worker.join(timeout=3)
 
 
 def do_interactive_login_for_token(
@@ -333,27 +317,20 @@ def do_interactive_login_for_token(
     assert sys.stdin.isatty(), "This function should only be called when stdin is a TTY"
 
     session = _CLIAuthSession()
-    callback_url: str | None = None
-    port = _find_free_port()
-
-    threading.Thread(
-        target=_run_server, kwargs={"session": session, "port": port, "api_server": api_server}, daemon=True
-    ).start()
-    if _wait_for_callback_server_to_start(session=session, port=port):
-        callback_url = f"http://127.0.0.1:{port}/callback"
-    auth_url = build_browser_login_url(api_server, callback_url=callback_url)
-    if agent_hint:
-        console.print(Panel(agent_hint, title="🤖 Agent Hint", border_style="cyan"))
+    with _callback_url(session, api_server=api_server) as callback_url:
+        auth_url = build_browser_login_url(api_server, callback_url=callback_url)
+        if agent_hint:
+            console.print(Panel(agent_hint, title="🤖 Agent Hint", border_style="cyan"))
+            console.print()
+        console.print("Open this URL in any browser to sign in:")
         console.print()
-    console.print("Open this URL in any browser to sign in:")
-    console.print()
-    console.print(auth_url)
-    console.print()
-    if open_browser:
-        _open_browser(url=auth_url)
+        console.print(auth_url)
+        console.print()
+        if open_browser:
+            _open_browser(url=auth_url)
 
-    _start_manual_code_prompt(session=session, api_server=api_server)
-    session.auth_completed.wait()
+        _start_manual_code_prompt(session=session, api_server=api_server)
+        session.auth_completed.wait()
     if session.error:
         raise RuntimeError(session.error)
     if not session.token:
