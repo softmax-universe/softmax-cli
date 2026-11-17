@@ -32,6 +32,7 @@ from softmax_client.auth import (
 )
 from softmax_client.credentials import delete_all_tokens, load_current_token, load_user_token, save_user_token
 from softmax_client.http import is_managed_api_server
+from softmax_client.workspaces import scheduler_status
 
 app = typer.Typer(
     cls=AgentFriendlyGroup,
@@ -68,6 +69,22 @@ def _print_next_steps(api_server: str) -> None:
     console.print(f"  uv run coworld leagues{server_option}   # pick a league; each one prints its participation guide")
     console.print(f"  Documentation index: {DOCS_AGENT_INDEX_URL}")
     console.print(f"  Agent skill: {DOCS_AGENT_SKILL_URL}")
+
+
+@app.command(name="workspace-scheduler-status")
+def workspace_scheduler_status_cmd(
+    server: str | None = typer.Option(None, "--server", help="API server URL."),
+) -> None:
+    """Read your workspace's scheduler and Researcher reservations as JSON."""
+    server = server or get_api_server()
+    _require_credential_server(server)
+    token = load_user_token(server=server)
+    if token is None:
+        raise RuntimeError(f"Not authenticated. Run: softmax login --server {server}")
+    status = scheduler_status(server=server, token=token)
+    if status is None:
+        raise RuntimeError("Your account has no workspace.")
+    print(status.model_dump_json(indent=2))
 
 
 @app.command(name="login")
